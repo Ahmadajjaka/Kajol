@@ -1,0 +1,511 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Hardened Primitives ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'garmarmar293@gmail.com')
+      );
+    }
+
+    function isApprovedUser() {
+      return isSignedIn() && (
+        isAdmin() ||
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        !('approvalStatus' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved'
+      );
+    }
+
+    // --- Entity Validation Blueprints ---
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+        'uid', 'displayName', 'clinicalTrack', 'subscriptionTier',
+        'language', 'theme', 'xp', 'level', 'completedCasesCount',
+        'dailyStreak', 'badges', 'favoriteCaseIds', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'uid', 'displayName', 'clinicalTrack', 'subscriptionTier',
+        'approvalStatus', 'credits', 'dailyUsageCount', 'lastUsageDate',
+        'specialtyUsageToday', 'unlockedFeatures',
+        'language', 'theme', 'xp', 'level', 'completedCasesCount',
+        'dailyStreak', 'lastChallengeDate', 'badges', 'favoriteCaseIds',
+        'createdAt', 'updatedAt'
+      ])
+      && isValidId(data.uid)
+      && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+      && data.clinicalTrack in ['student', 'doctor', 'specialist']
+      && data.subscriptionTier in ['free', 'pro']
+      && (!('approvalStatus' in data) || data.approvalStatus in ['pending', 'approved', 'rejected'])
+      && (!('credits' in data) || (data.credits is number && data.credits >= 0 && data.credits <= 1000000))
+      && (!('dailyUsageCount' in data) || (data.dailyUsageCount is number && data.dailyUsageCount >= 0 && data.dailyUsageCount <= 10000))
+      && (!('lastUsageDate' in data) || (data.lastUsageDate is string && data.lastUsageDate.size() <= 20))
+      && (!('specialtyUsageToday' in data) || (data.specialtyUsageToday is map && data.specialtyUsageToday.size() <= 30))
+      && (!('unlockedFeatures' in data) || (
+        data.unlockedFeatures is list
+        && data.unlockedFeatures.size() <= 30
+        && (data.unlockedFeatures.size() == 0 || data.unlockedFeatures[0] is string)
+      ))
+      && data.language in ['ar', 'en']
+      && data.theme in ['dark', 'light']
+      && data.xp is number && data.xp >= 0 && data.xp <= 1000000
+      && data.level is number && data.level >= 1 && data.level <= 200
+      && data.completedCasesCount is number && data.completedCasesCount >= 0 && data.completedCasesCount <= 100000
+      && data.dailyStreak is number && data.dailyStreak >= 0 && data.dailyStreak <= 10000
+      && (!('lastChallengeDate' in data) || (data.lastChallengeDate is string && data.lastChallengeDate.size() <= 20))
+      && data.badges is list && data.badges.size() <= 50
+      && (data.badges.size() == 0 || data.badges[0] is string)
+      && data.favoriteCaseIds is list && data.favoriteCaseIds.size() <= 100
+      && (data.favoriteCaseIds.size() == 0 || data.favoriteCaseIds[0] is string);
+    }
+
+    function isValidUserPrivateInfo(data) {
+      return data.keys().hasAll(['uid', 'email', 'proRequestStatus', 'createdAt', 'updatedAt'])
+      && data.keys().hasOnly(['uid', 'email', 'proRequestStatus', 'createdAt', 'updatedAt'])
+      && isValidId(data.uid)
+      && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+      && data.proRequestStatus in ['none', 'requested', 'approved'];
+    }
+
+    function isValidClinicalCase(data) {
+      return data.keys().hasAll([
+        'id', 'specialty', 'difficulty', 'archetype', 'tier', 'isPublished',
+        'sourceType', 'titleAr', 'titleEn', 'patientSummary', 'clinicalTruth',
+        'guidelineRefs', 'createdBy', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'specialty', 'difficulty', 'archetype', 'tier', 'isPublished',
+        'sourceType', 'titleAr', 'titleEn', 'patientSummary', 'clinicalTruth',
+        'guidelineRefs', 'createdBy', 'createdAt', 'updatedAt'
+      ])
+      && isValidId(data.id)
+      && data.specialty is string && data.specialty.size() >= 2 && data.specialty.size() <= 80
+      && data.difficulty in ['easy', 'medium', 'hard']
+      && data.archetype in ['common', 'rare', 'emergency', 'multimorbid', 'misleading', 'urgent']
+      && data.tier in ['free', 'pro']
+      && data.isPublished is bool
+      && data.sourceType in ['curated', 'ai_generated']
+      && data.titleAr is string && data.titleAr.size() >= 2 && data.titleAr.size() <= 200
+      && data.titleEn is string && data.titleEn.size() >= 2 && data.titleEn.size() <= 200
+      && data.patientSummary is map
+      && data.clinicalTruth is map
+      && data.guidelineRefs is list && data.guidelineRefs.size() <= 20
+      && (data.guidelineRefs.size() == 0 || data.guidelineRefs[0] is string)
+      && data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128;
+    }
+
+    function isValidSession(data) {
+      return data.keys().hasAll([
+        'id', 'userId', 'caseId', 'specialty', 'mode', 'status',
+        'elapsedSeconds', 'unlockedHistorySections', 'unlockedExamSystems',
+        'orderedLabs', 'orderedImaging', 'chatMessages', 'differentialList',
+        'finalDiagnosis', 'treatmentPlan', 'totalScore', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'caseId', 'specialty', 'mode', 'status',
+        'elapsedSeconds', 'unlockedHistorySections', 'unlockedExamSystems',
+        'orderedLabs', 'orderedImaging', 'chatMessages', 'differentialList',
+        'finalDiagnosis', 'treatmentPlan', 'scoreBreakdown', 'totalScore',
+        'evaluationReport', 'createdAt', 'updatedAt'
+      ])
+      && isValidId(data.id)
+      && isValidId(data.userId)
+      && isValidId(data.caseId)
+      && data.specialty is string && data.specialty.size() >= 2 && data.specialty.size() <= 80
+      && data.mode in ['beginner', 'practice', 'emergency', 'specialist', 'osce', 'random', 'daily']
+      && data.status in ['active', 'completed']
+      && data.elapsedSeconds is number && data.elapsedSeconds >= 0 && data.elapsedSeconds <= 86400
+      && data.unlockedHistorySections is list && data.unlockedHistorySections.size() <= 20
+      && (data.unlockedHistorySections.size() == 0 || data.unlockedHistorySections[0] is string)
+      && data.unlockedExamSystems is list && data.unlockedExamSystems.size() <= 20
+      && (data.unlockedExamSystems.size() == 0 || data.unlockedExamSystems[0] is string)
+      && data.orderedLabs is list && data.orderedLabs.size() <= 30
+      && (data.orderedLabs.size() == 0 || data.orderedLabs[0] is string)
+      && data.orderedImaging is list && data.orderedImaging.size() <= 20
+      && (data.orderedImaging.size() == 0 || data.orderedImaging[0] is string)
+      && data.chatMessages is list && data.chatMessages.size() <= 150
+      && (data.chatMessages.size() == 0 || data.chatMessages[0] is map)
+      && data.differentialList is list && data.differentialList.size() <= 15
+      && (data.differentialList.size() == 0 || data.differentialList[0] is string)
+      && data.finalDiagnosis is string && data.finalDiagnosis.size() <= 300
+      && data.treatmentPlan is string && data.treatmentPlan.size() <= 4000
+      && (!('scoreBreakdown' in data) || data.scoreBreakdown is map)
+      && data.totalScore is number && data.totalScore >= 0 && data.totalScore <= 100
+      && (!('evaluationReport' in data) || data.evaluationReport is map);
+    }
+
+    function isValidDailyChallenge(data) {
+      return data.keys().hasAll(['dateId', 'caseId', 'bonusXp', 'updatedAt'])
+      && data.keys().hasOnly(['dateId', 'caseId', 'bonusXp', 'updatedAt'])
+      && data.dateId is string && data.dateId.size() <= 20 && data.dateId.matches('^[0-9\\-]+$')
+      && isValidId(data.caseId)
+      && data.bonusXp is number && data.bonusXp >= 0 && data.bonusXp <= 500;
+    }
+
+    function isValidErrorReport(data) {
+      return data.keys().hasAll(['id', 'userId', 'caseId', 'category', 'description', 'status', 'createdAt', 'updatedAt'])
+      && data.keys().hasOnly(['id', 'userId', 'caseId', 'category', 'description', 'status', 'createdAt', 'updatedAt'])
+      && isValidId(data.id)
+      && isValidId(data.userId)
+      && isValidId(data.caseId)
+      && data.category in ['medical_accuracy', 'lab_reference', 'translation', 'technical']
+      && data.description is string && data.description.size() >= 5 && data.description.size() <= 2000
+      && data.status in ['open', 'reviewed', 'resolved'];
+    }
+
+    function isValidAiUsageLog(data) {
+      return data.keys().hasAll(['id', 'userId', 'endpoint', 'provider', 'latencyMs', 'createdAt'])
+      && data.keys().hasOnly(['id', 'userId', 'endpoint', 'provider', 'latencyMs', 'createdAt'])
+      && isValidId(data.id)
+      && isValidId(data.userId)
+      && data.endpoint is string && data.endpoint.size() >= 2 && data.endpoint.size() <= 60
+      && data.provider in ['gemini', 'groq']
+      && data.latencyMs is number && data.latencyMs >= 0 && data.latencyMs <= 120000;
+    }
+
+    function isValidPlatformSettings(data) {
+      return data.keys().hasAll(['activeProvider', 'freeDailyLimit', 'proEnabled', 'updatedAt'])
+      && data.keys().hasOnly([
+        'activeProvider', 'freeDailyLimit', 'proDailyLimit', 'aiGenerationCost',
+        'proEnabled', 'featureFlags', 'specialtyRules', 'updatedAt'
+      ])
+      && data.activeProvider in ['gemini', 'groq']
+      && data.freeDailyLimit is number && data.freeDailyLimit >= 1 && data.freeDailyLimit <= 500
+      && (!('proDailyLimit' in data) || (data.proDailyLimit is number && data.proDailyLimit >= 1 && data.proDailyLimit <= 5000))
+      && (!('aiGenerationCost' in data) || (data.aiGenerationCost is number && data.aiGenerationCost >= 0 && data.aiGenerationCost <= 1000))
+      && data.proEnabled is bool
+      && (!('featureFlags' in data) || data.featureFlags is map)
+      && (!('specialtyRules' in data) || data.specialtyRules is map);
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll([
+        'id', 'titleAr', 'titleEn', 'messageAr', 'messageEn',
+        'severity', 'isActive', 'createdBy', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'titleAr', 'titleEn', 'messageAr', 'messageEn',
+        'severity', 'isActive', 'createdBy', 'createdAt', 'updatedAt'
+      ])
+      && isValidId(data.id)
+      && data.titleAr is string && data.titleAr.size() >= 2 && data.titleAr.size() <= 150
+      && data.titleEn is string && data.titleEn.size() >= 2 && data.titleEn.size() <= 150
+      && data.messageAr is string && data.messageAr.size() >= 2 && data.messageAr.size() <= 1500
+      && data.messageEn is string && data.messageEn.size() >= 2 && data.messageEn.size() <= 1500
+      && data.severity in ['info', 'success', 'warning', 'urgent']
+      && data.isActive is bool
+      && isValidId(data.createdBy);
+    }
+
+    // --- Collection Rules ---
+
+    // 1. User Profiles (No PII email)
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().subscriptionTier == 'free'
+        && (isAdmin() || !('approvalStatus' in incoming()) || incoming().approvalStatus in ['pending', 'approved'])
+        && (!('credits' in incoming()) || incoming().credits == 0 || isAdmin())
+        && (!('dailyUsageCount' in incoming()) || incoming().dailyUsageCount == 0)
+        && (!('unlockedFeatures' in incoming()) || incoming().unlockedFeatures.size() == 0 || isAdmin())
+        && incoming().xp == 0
+        && incoming().level == 1
+        && incoming().completedCasesCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().subscriptionTier == existing().subscriptionTier
+            && (!('approvalStatus' in incoming()) || ('approvalStatus' in existing() && incoming().approvalStatus == existing().approvalStatus))
+            && (!('unlockedFeatures' in incoming()) || ('unlockedFeatures' in existing() && incoming().unlockedFeatures == existing().unlockedFeatures))
+            && (
+              // Action: Update Preferences & Favorites
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'displayName', 'clinicalTrack', 'language', 'theme', 'favoriteCaseIds', 'updatedAt'
+              ]) ||
+              // Action: Spend Credits & Increment Daily Usage (cannot self-mint credits)
+              (
+                incoming().diff(existing()).affectedKeys().hasOnly([
+                  'credits', 'dailyUsageCount', 'lastUsageDate', 'specialtyUsageToday', 'updatedAt'
+                ])
+                && incoming().credits >= 0
+                && (
+                  (!('credits' in existing()) && incoming().credits == 0) ||
+                  ('credits' in existing() && incoming().credits <= existing().credits)
+                )
+              ) ||
+              // Action: Record Simulation Progression (bounded XP)
+              (
+                incoming().diff(existing()).affectedKeys().hasOnly([
+                  'xp', 'level', 'completedCasesCount', 'dailyStreak', 'lastChallengeDate', 'badges', 'updatedAt'
+                ])
+                && incoming().xp >= existing().xp
+                && incoming().xp <= existing().xp + 500
+                && incoming().completedCasesCount >= existing().completedCasesCount
+                && incoming().completedCasesCount <= existing().completedCasesCount + 1
+              )
+            )
+          )
+        );
+
+      allow delete: if isAdmin() && isValidId(userId);
+
+      // Isolated PII Subcollection
+      match /private/{docId} {
+        allow get: if isSignedIn() && isValidId(docId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && (isOwner(userId) || isAdmin());
+
+        allow create: if isSignedIn()
+          && isValidId(userId)
+          && isValidId(docId)
+          && isOwner(userId)
+          && isValidUserPrivateInfo(incoming())
+          && incoming().uid == request.auth.uid
+          && incoming().proRequestStatus == 'none'
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+
+        allow update: if isSignedIn()
+          && isValidId(userId)
+          && isValidId(docId)
+          && isValidUserPrivateInfo(incoming())
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            (
+              isOwner(userId)
+              && incoming().diff(existing()).affectedKeys().hasOnly(['proRequestStatus', 'updatedAt'])
+              && incoming().proRequestStatus == 'requested'
+            )
+          );
+
+        allow delete: if isAdmin() && isValidId(userId) && isValidId(docId);
+      }
+    }
+
+    // 2. Admins Registry
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin() && isValidId(adminId);
+    }
+
+    // 3. Clinical Cases
+    match /clinical_cases/{caseId} {
+      allow get: if isSignedIn() && isValidId(caseId) && (resource == null || existing().isPublished == true || existing().createdBy == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.isPublished == true || isAdmin());
+
+      allow create: if isVerifiedUser()
+        && isApprovedUser()
+        && isValidId(caseId)
+        && isValidClinicalCase(incoming())
+        && incoming().id == caseId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (incoming().createdBy == request.auth.uid && incoming().isPublished == true)
+        );
+
+      allow update: if isAdmin()
+        && isValidId(caseId)
+        && isValidClinicalCase(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+
+      allow delete: if isAdmin() && isValidId(caseId);
+    }
+
+    // 4. Simulation Sessions
+    match /sessions/{sessionId} {
+      allow get: if isSignedIn() && isValidId(sessionId) && (resource == null || existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser()
+        && isApprovedUser()
+        && isValidId(sessionId)
+        && isValidSession(incoming())
+        && incoming().id == sessionId
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'active'
+        && incoming().totalScore == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/clinical_cases/$(incoming().caseId));
+
+      allow update: if isVerifiedUser()
+        && isValidId(sessionId)
+        && isValidSession(incoming())
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().caseId == existing().caseId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid
+            && existing().status == 'active'
+            && (
+              // Action: Interactive clinical progression while active
+              (
+                incoming().status == 'active'
+                && incoming().diff(existing()).affectedKeys().hasOnly([
+                  'elapsedSeconds', 'unlockedHistorySections', 'unlockedExamSystems',
+                  'orderedLabs', 'orderedImaging', 'chatMessages', 'differentialList',
+                  'finalDiagnosis', 'treatmentPlan', 'updatedAt'
+                ])
+              ) ||
+              // Action: Submit final evaluation (Terminal lock)
+              (
+                incoming().status == 'completed'
+                && incoming().diff(existing()).affectedKeys().hasOnly([
+                  'status', 'elapsedSeconds', 'differentialList', 'finalDiagnosis',
+                  'treatmentPlan', 'scoreBreakdown', 'totalScore', 'evaluationReport', 'updatedAt'
+                ])
+              )
+            )
+          )
+        );
+
+      allow delete: if isAdmin() && isValidId(sessionId);
+    }
+
+    // 5. Daily Challenges
+    match /daily_challenges/{dateId} {
+      allow get: if isSignedIn() && isValidId(dateId);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin()
+        && isValidId(dateId)
+        && isValidDailyChallenge(incoming())
+        && incoming().dateId == dateId
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(dateId);
+    }
+
+    // 6. Error Reports
+    match /error_reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (resource == null || existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser()
+        && isValidId(reportId)
+        && isValidErrorReport(incoming())
+        && incoming().id == reportId
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isAdmin()
+        && isValidId(reportId)
+        && isValidErrorReport(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(reportId);
+    }
+
+    // 7. AI Usage Logs
+    match /ai_usage_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (resource == null || existing().userId == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isVerifiedUser()
+        && isValidId(logId)
+        && isValidAiUsageLog(incoming())
+        && incoming().id == logId
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time;
+
+      allow update, delete: if isAdmin() && isValidId(logId);
+    }
+
+    // 8. Platform Settings
+    match /platform_settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin()
+        && isValidId(settingId)
+        && isValidPlatformSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(settingId);
+    }
+
+    // 9. Global Announcements (Admin Broadcasts)
+    match /announcements/{announcementId} {
+      allow get: if isSignedIn() && isValidId(announcementId) && (resource == null || existing().isActive == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.isActive == true || isAdmin());
+
+      allow create: if isAdmin()
+        && isValidId(announcementId)
+        && isValidAnnouncement(incoming())
+        && incoming().id == announcementId
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isAdmin()
+        && isValidId(announcementId)
+        && isValidAnnouncement(incoming())
+        && incoming().id == existing().id
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+
+      allow delete: if isAdmin() && isValidId(announcementId);
+    }
+  }
+}

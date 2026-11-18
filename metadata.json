@@ -1,0 +1,8 @@
+{
+  "name": "MAMO CLINICAL SIMULATOR AI",
+  "description": "Advanced bilingual AI clinical case simulation platform for medical students, doctors, and specialists.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

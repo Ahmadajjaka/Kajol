@@ -1,0 +1,275 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Clinician learner profile, approval status, credits wallet, progression XP, unlocked features, and subscription tier without PII email.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "clinicalTrack": { "type": "string", "enum": ["student", "doctor", "specialist"] },
+        "subscriptionTier": { "type": "string", "enum": ["free", "pro"] },
+        "approvalStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "credits": { "type": "number" },
+        "dailyUsageCount": { "type": "number" },
+        "lastUsageDate": { "type": "string", "maxLength": 20 },
+        "specialtyUsageToday": { "type": "object" },
+        "unlockedFeatures": { "type": "array" },
+        "language": { "type": "string", "enum": ["ar", "en"] },
+        "theme": { "type": "string", "enum": ["dark", "light"] },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "completedCasesCount": { "type": "number" },
+        "dailyStreak": { "type": "number" },
+        "lastChallengeDate": { "type": "string", "maxLength": 20 },
+        "badges": { "type": "array" },
+        "favoriteCaseIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "clinicalTrack",
+        "subscriptionTier",
+        "language",
+        "theme",
+        "xp",
+        "level",
+        "completedCasesCount",
+        "dailyStreak",
+        "badges",
+        "favoriteCaseIds",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated PII document containing clinician email and institutional metadata.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 200 },
+        "proRequestStatus": { "type": "string", "enum": ["none", "requested", "approved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "proRequestStatus", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Admin authorization record checked by Firestore rules.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "grantedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "grantedAt"]
+    },
+    "ClinicalCase": {
+      "title": "ClinicalCase",
+      "description": "Curated or AI-synthesized clinical case metadata and progressive clinical truth.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "specialty": { "type": "string", "maxLength": 80 },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+        "archetype": { "type": "string", "enum": ["common", "rare", "emergency", "multimorbid", "misleading", "urgent"] },
+        "tier": { "type": "string", "enum": ["free", "pro"] },
+        "isPublished": { "type": "boolean" },
+        "sourceType": { "type": "string", "enum": ["curated", "ai_generated"] },
+        "titleAr": { "type": "string", "maxLength": 200 },
+        "titleEn": { "type": "string", "maxLength": 200 },
+        "patientSummary": { "type": "object" },
+        "clinicalTruth": { "type": "object" },
+        "guidelineRefs": { "type": "array" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "specialty",
+        "difficulty",
+        "archetype",
+        "tier",
+        "isPublished",
+        "sourceType",
+        "titleAr",
+        "titleEn",
+        "patientSummary",
+        "clinicalTruth",
+        "guidelineRefs",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SimulationSession": {
+      "title": "SimulationSession",
+      "description": "Learner clinical encounter record, progressive actions, and final 100-point rubric report.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "specialty": { "type": "string", "maxLength": 80 },
+        "mode": { "type": "string", "enum": ["beginner", "practice", "emergency", "specialist", "osce", "random", "daily"] },
+        "status": { "type": "string", "enum": ["active", "completed"] },
+        "elapsedSeconds": { "type": "number" },
+        "unlockedHistorySections": { "type": "array" },
+        "unlockedExamSystems": { "type": "array" },
+        "orderedLabs": { "type": "array" },
+        "orderedImaging": { "type": "array" },
+        "chatMessages": { "type": "array" },
+        "differentialList": { "type": "array" },
+        "finalDiagnosis": { "type": "string", "maxLength": 300 },
+        "treatmentPlan": { "type": "string", "maxLength": 4000 },
+        "scoreBreakdown": { "type": "object" },
+        "totalScore": { "type": "number" },
+        "evaluationReport": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "userId",
+        "caseId",
+        "specialty",
+        "mode",
+        "status",
+        "elapsedSeconds",
+        "unlockedHistorySections",
+        "unlockedExamSystems",
+        "orderedLabs",
+        "orderedImaging",
+        "chatMessages",
+        "differentialList",
+        "finalDiagnosis",
+        "treatmentPlan",
+        "totalScore",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DailyChallenge": {
+      "title": "DailyChallenge",
+      "description": "Daily challenge schedule pointing to a published clinical case.",
+      "type": "object",
+      "properties": {
+        "dateId": { "type": "string", "maxLength": 20, "pattern": "^[0-9\\-]+$" },
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bonusXp": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["dateId", "caseId", "bonusXp", "updatedAt"]
+    },
+    "ErrorReport": {
+      "title": "ErrorReport",
+      "description": "Medical accuracy or technical issue report submitted by clinicians for admin review.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "category": { "type": "string", "enum": ["medical_accuracy", "lab_reference", "translation", "technical"] },
+        "description": { "type": "string", "minLength": 5, "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["open", "reviewed", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "caseId", "category", "description", "status", "createdAt", "updatedAt"]
+    },
+    "AiUsageLog": {
+      "title": "AiUsageLog",
+      "description": "Telemetry entry for AI clinical simulation requests monitored in the Admin Dashboard.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "endpoint": { "type": "string", "maxLength": 60 },
+        "provider": { "type": "string", "enum": ["gemini", "groq"] },
+        "latencyMs": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "endpoint", "provider", "latencyMs", "createdAt"]
+    },
+    "PlatformSettings": {
+      "title": "PlatformSettings",
+      "description": "Global platform configuration controlled by admins including feature flags, daily usage limits, and per-specialty point pricing.",
+      "type": "object",
+      "properties": {
+        "activeProvider": { "type": "string", "enum": ["gemini", "groq"] },
+        "freeDailyLimit": { "type": "number" },
+        "proDailyLimit": { "type": "number" },
+        "aiGenerationCost": { "type": "number" },
+        "proEnabled": { "type": "boolean" },
+        "featureFlags": { "type": "object" },
+        "specialtyRules": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["activeProvider", "freeDailyLimit", "proEnabled", "updatedAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Platform-wide notification published by admins and displayed to all clinicians.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "titleAr": { "type": "string", "minLength": 2, "maxLength": 150 },
+        "titleEn": { "type": "string", "minLength": 2, "maxLength": 150 },
+        "messageAr": { "type": "string", "minLength": 2, "maxLength": 1500 },
+        "messageEn": { "type": "string", "minLength": 2, "maxLength": 1500 },
+        "severity": { "type": "string", "enum": ["info", "success", "warning", "urgent"] },
+        "isActive": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "titleAr", "titleEn", "messageAr", "messageEn", "severity", "isActive", "createdBy", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public/progression clinician profile, approval status, and credits indexed by UID."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated PII document for user email and Pro request tracking."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin role allowlist documents."
+    },
+    "/clinical_cases/{caseId}": {
+      "schema": { "$ref": "#/entities/ClinicalCase" },
+      "description": "Curated and AI-generated clinical simulation cases."
+    },
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/SimulationSession" },
+      "description": "Clinician simulation sessions and 100-point rubric evaluations."
+    },
+    "/daily_challenges/{dateId}": {
+      "schema": { "$ref": "#/entities/DailyChallenge" },
+      "description": "Daily challenge pointers indexed by YYYY-MM-DD."
+    },
+    "/error_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/ErrorReport" },
+      "description": "User-submitted medical accuracy and bug reports."
+    },
+    "/ai_usage_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AiUsageLog" },
+      "description": "AI endpoint invocation logs for admin usage monitoring."
+    },
+    "/platform_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/PlatformSettings" },
+      "description": "Global platform configuration managed by admins."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Global announcements published by admins for all users."
+    }
+  }
+}
